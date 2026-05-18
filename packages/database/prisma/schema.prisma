@@ -1,0 +1,201 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  output          = "../../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  PATIENT
+  NURSE
+  DOCTOR
+  RURAL_HO
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AppointmentType {
+  IN_PERSON
+  REMOTE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  role         Role
+  name         String
+  phone        String?
+  email        String   @unique
+  passwordHash String
+  isVerified   Boolean  @default(false)
+  isApproved   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient      Patient?
+  doctor       Doctor?
+  nurse        Nurse?
+  notifications Notification[]
+  auditLogs    AuditLog[]
+}
+
+model Patient {
+  id                String   @id @default(uuid())
+  user              User     @relation(fields: [userId], references: [id])
+  userId            String   @unique
+  dateOfBirth       DateTime
+  bloodType         String?
+  chronicConditions String?
+  assignedNurseId   String?
+  assignedNurse     Nurse?   @relation(fields: [assignedNurseId], references: [id])
+
+  appointments      Appointment[]
+  vitals            Vitals[]
+  prescriptions     Prescription[]
+  labResults        LabResult[]
+}
+
+model Doctor {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String   @unique
+  specialty    String
+  hospitalId   String
+  hospital     Hospital @relation(fields: [hospitalId], references: [id])
+  licenseNumber String  @unique
+  isAvailable   Boolean  @default(false)
+  workingHours  Json?    // Stores working hours schedule
+  lastLat       Float?
+  lastLng       Float?
+
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  labResults        LabResult[]
+}
+
+model Nurse {
+  id                String   @id @default(uuid())
+  user              User     @relation(fields: [userId], references: [id])
+  userId            String   @unique
+  assignedZone      String?
+  supervisorDoctorId String?
+  
+  patients          Patient[]
+  vitals            Vitals[]
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  patientId   String
+  doctor      Doctor            @relation(fields: [doctorId], references: [id])
+  doctorId    String
+  scheduledAt DateTime
+  status      AppointmentStatus @default(PENDING)
+  type        AppointmentType
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Vitals {
+  id             String   @id @default(uuid())
+  patient        Patient  @relation(fields: [patientId], references: [id])
+  patientId      String
+  nurse          Nurse    @relation(fields: [nurseId], references: [id])
+  nurseId        String
+  bloodPressure  String   // e.g. "120/80"
+  glucose        Float?
+  heartRate      Int?
+  oxygenSat      Float?
+  temp           Float?
+  notes          String?
+  triageResult   Json?    // Stores AI Triage output
+  recordedAt     DateTime @default(now())
+}
+
+model Prescription {
+  id          String   @id @default(uuid())
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId    String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  patientId   String
+  medications Json     // Array of medications
+  notes       String?
+  issuedAt    DateTime @default(now())
+  expiresAt   DateTime?
+  pharmacyId  String?
+  pharmacy    Pharmacy? @relation(fields: [pharmacyId], references: [id])
+}
+
+model Consultation {
+  id           String   @id @default(uuid())
+  requesterId  String   // Rural HO User ID
+  specialistId String?  // Specialist Doctor User ID
+  status       String   // e.g. "PENDING", "ACTIVE", "COMPLETED"
+  notes        String?
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model LabResult {
+  id          String   @id @default(uuid())
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  patientId   String
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId    String
+  testName    String
+  resultValue String?
+  unit        String?
+  status      String   @default("PENDING")
+  labName     String?
+  orderedAt   DateTime @default(now())
+  completedAt DateTime?
+}
+model Hospital {
+  id               String   @id @default(uuid())
+  name             String
+  location         String
+  totalDoctors     Int      @default(0)
+  availableDoctors Int      @default(0)
+  specialties      Json     // Array of specialties
+  doctors          Doctor[]
+}
+
+model Pharmacy {
+  id           String         @id @default(uuid())
+  name         String
+  location     String
+  phone        String
+  partnerSince DateTime       @default(now())
+  prescriptions Prescription[]
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  ipAddress String?
+  timestamp DateTime @default(now())
+}

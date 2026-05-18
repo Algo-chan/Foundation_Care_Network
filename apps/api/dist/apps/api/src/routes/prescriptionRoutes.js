@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const prescriptionController_1 = require("../controllers/prescriptionController");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.post('/', (0, auth_1.authorize)('DOCTOR'), prescriptionController_1.createPrescription);
+router.get('/my', prescriptionController_1.getMyPrescriptions);
+exports.default = router;
