@@ -1,14 +1,18 @@
-import { Response, NextFunction } from 'express';
-import { AuthRequest } from '../middleware/auth';
-import prisma from '../utils/prisma';
-import { 
-    updateProfileSchema, 
-    updatePatientProfileSchema, 
-    updateDoctorProfileSchema, 
-    updateNurseProfileSchema 
-} from 'shared/src/schemas/user';
+import { Response, NextFunction } from "express";
+import { AuthRequest } from "../middleware/auth";
+import prisma from "../utils/prisma";
+import {
+  updateProfileSchema,
+  updatePatientProfileSchema,
+  updateDoctorProfileSchema,
+  updateNurseProfileSchema,
+} from "../../lib/user";
 
-export const getProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const getProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const userId = req.user?.userId;
 
@@ -18,13 +22,17 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
         patient: true,
         doctor: { include: { hospital: true } },
         nurse: true,
-      }
+      },
     });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'User not found', status: 404 }
+        error: {
+          code: "USER_NOT_FOUND",
+          message: "User not found",
+          status: 404,
+        },
       });
     }
 
@@ -34,7 +42,11 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
-export const updateProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const updateProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const userId = req.user?.userId;
     const role = req.user?.role;
@@ -47,34 +59,36 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
     }
     await prisma.user.update({
       where: { id: userId },
-      data: cleanData
+      data: cleanData,
     });
 
     // 2. Update Role-Specific Info
-    if (role === 'PATIENT') {
+    if (role === "PATIENT") {
       const patientData = updatePatientProfileSchema.parse(req.body);
       await prisma.patient.update({
         where: { userId },
         data: {
-            ...patientData,
-            dateOfBirth: patientData.dateOfBirth ? new Date(patientData.dateOfBirth) : undefined
-        }
+          ...patientData,
+          dateOfBirth: patientData.dateOfBirth
+            ? new Date(patientData.dateOfBirth)
+            : undefined,
+        },
       });
-    } else if (role === 'DOCTOR') {
+    } else if (role === "DOCTOR") {
       const doctorData = updateDoctorProfileSchema.parse(req.body);
       await prisma.doctor.update({
         where: { userId },
-        data: doctorData
+        data: doctorData,
       });
-    } else if (role === 'NURSE') {
+    } else if (role === "NURSE") {
       const nurseData = updateNurseProfileSchema.parse(req.body);
       await prisma.nurse.update({
         where: { userId },
-        data: nurseData
+        data: nurseData,
       });
     }
 
-    res.json({ success: true, message: 'Profile updated successfully' });
+    res.json({ success: true, message: "Profile updated successfully" });
   } catch (error) {
     next(error);
   }
