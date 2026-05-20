@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 import prisma from "../utils/prisma";
 import {
   generateAccessToken,
@@ -8,6 +9,103 @@ import {
 } from "../utils/token";
 import redis from "../utils/redis";
 import { registerSchema, loginSchema } from "../../lib/auth";
+import { sendOTPSMS } from "../utils/sms";
+
+export const register = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const validatedData = registerSchema.parse(req.body);
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: validatedData.email },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "USER_EXISTS",
+          message: "User already exists with this email",
+          status: 400,
+        },
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(validatedData.password, 12);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const user = await prisma.user.create({
+      data: {
+        name: validatedData.name,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        passwordHash,
+        role: validatedData.role,
+        isVerified: false,
+        isApproved: validatedData.role === "PATIENT", // Patients are auto-approved, others need admin
+      },
+    });
+
+    // Store OTP in Redis for 10 minutes
+    await redis.set(`otp:${user.id}`, otp, "EX", 600);
+
+    // Send OTP via SMS if phone is provided
+    if (user.phone) {
+      await sendOTPSMS(user.phone, otp);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Registration successful. Please verify your phone number.",
+      data: { userId: user.id },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const verifyOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId, otp } = req.body;
+
+    if (!userId || !otp) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "MISSING_FIELDS", message: "User ID and OTP are required", status: 400 },
+      });
+    }
+
+    const storedOtp = await redis.get(`otp:${userId}`);
+
+    if (!storedOtp || storedOtp !== otp) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "INVALID_OTP", message: "Invalid or expired OTP", status: 400 },
+      });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: true },
+    });
+
+    await redis.del(`otp:${userId}`);
+
+    res.json({
+      success: true,
+      message: "Phone number verified successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const login = async (
   req: Request,
@@ -193,7 +291,7 @@ export const logout = async (req: Request, res: Response) => {
   res.json({ success: true, message: "Logged out successfully" });
 };
 // Internal register function (to be called by admin or seed)
-export const registerUser = async (data: any) => {
+export const registerUser = async (data: z.infer<typeof registerSchema>) => {
   const validatedData = registerSchema.parse(data);
 
   const existingUser = await prisma.user.findUnique({

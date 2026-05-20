@@ -1,21 +1,25 @@
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: '../../.env' });
 
-import http from 'http';
-import app from './app';
-import { initSocketIO } from './services/socketService';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const PORT = process.env.PORT || 4000;
+async function main() {
+  const http = await import('http');
+  const app = (await import('./app')).default;
+  const { initSocketIO } = await import('./services/socketService');
 
-console.log('--- STARTING API ---');
-console.log('ENV PATH:', path.join(__dirname, '../../../.env'));
-console.log('PORT:', process.env.PORT);
-console.log('DB_URL:', process.env.DATABASE_URL ? 'DEFINED' : 'UNDEFINED');
+  const PORT = process.env.PORT || 4000;
 
-const server = http.createServer(app);
-initSocketIO(server);
+  console.log('--- STARTING API ---');
+  console.log('PORT:', process.env.PORT);
+  console.log('DB_URL:', process.env.DATABASE_URL ? 'DEFINED' : 'UNDEFINED');
 
-server.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-});
+  const server = http.default.createServer(app);
+  initSocketIO(server);
+
+  server.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+  });
+}
+
+main();

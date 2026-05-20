@@ -33,7 +33,7 @@ export default function AuditLogsPage() {
       const response: any = await api.get('/admin/audit-logs', { params: { page, limit: 20 } });
       if (response.success) {
         setLogs(response.data);
-        setTotalPages(response.pagination.pages);
+        setTotalPages(response.meta.totalPages);
       }
     } catch (err) {
       console.error('Failed to fetch audit logs');

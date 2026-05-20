@@ -69,6 +69,128 @@ export const approveUser = async (req: AuthRequest, res: Response, next: NextFun
     next(error);
   }
 };
+export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.user.delete({ where: { id } });
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getHospitals = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const hospitals = await prisma.hospital.findMany({ orderBy: { name: 'asc' } });
+    res.json({ success: true, data: hospitals });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createHospital = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, location, specialties } = req.body;
+    const hospital = await prisma.hospital.create({
+      data: { name, location, specialties }
+    });
+    res.status(201).json({ success: true, data: hospital });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteHospital = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.hospital.delete({ where: { id } });
+    res.json({ success: true, message: 'Hospital deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPharmacies = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const pharmacies = await prisma.pharmacy.findMany({ orderBy: { name: 'asc' } });
+    res.json({ success: true, data: pharmacies });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createPharmacy = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, location, phone } = req.body;
+    const pharmacy = await prisma.pharmacy.create({
+      data: { name, location, phone }
+    });
+    res.status(201).json({ success: true, data: pharmacy });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deletePharmacy = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.pharmacy.delete({ where: { id } });
+    res.json({ success: true, message: 'Pharmacy deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAuditLogs = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        skip,
+        take: Number(limit),
+        orderBy: { timestamp: 'desc' },
+        include: { user: { select: { name: true, role: true } } }
+      }),
+      prisma.auditLog.count()
+    ]);
+
+    res.json({
+      success: true,
+      data: logs,
+      meta: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const exportAuditLogs = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { timestamp: 'desc' },
+      include: { user: { select: { name: true, role: true } } }
+    });
+
+    const header = 'Timestamp,User,Role,Action,Entity,EntityID,IP Address\n';
+    const rows = logs.map(log => {
+      return `${log.timestamp.toISOString()},"${log.user.name}",${log.user.role},"${log.action}",${log.entity},${log.entityId},${log.ipAddress || 'Internal'}`;
+    }).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=audit-logs.csv');
+    res.status(200).send(header + rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getStats = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const [

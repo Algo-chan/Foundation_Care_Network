@@ -55,6 +55,29 @@ export function initSocketIO(server: HttpServer) {
       }
     });
 
+    socket.on('join:consultation', (consultationId: string) => {
+      socket.join(`consultation:${consultationId}`);
+    });
+
+    socket.on('send:message', async (data: { consultationId: string, senderId: string, content: string }) => {
+      try {
+        const message = await prisma.message.create({
+          data: {
+            consultationId: data.consultationId,
+            senderId: data.senderId,
+            content: data.content,
+          },
+          include: {
+            sender: { select: { name: true, role: true } },
+          },
+        });
+
+        io.to(`consultation:${data.consultationId}`).emit('new:message', message);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
+    });
+
     socket.on('disconnect', () => {
     });
   });
@@ -73,4 +96,9 @@ export function emitDoctorAvailabilityChange(doctorId: string, isAvailable: bool
   if (!io) return;
   io.to('public').emit('doctor:availability-changed', { doctorId, isAvailable });
   io.to(`doctor:${doctorId}`).emit('doctor:availability-changed', { doctorId, isAvailable });
+}
+
+export function emitWaitTimeUpdate(doctorId: string, waitTime: string, waitMinutes: number) {
+  if (!io) return;
+  io.to('public').emit('doctor:wait-time-updated', { doctorId, waitTime, waitMinutes });
 }

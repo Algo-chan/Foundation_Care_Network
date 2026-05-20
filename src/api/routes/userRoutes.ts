@@ -9,5 +9,6 @@ router.use(authenticate);
 
 router.get('/me', userController.getProfile);
 router.patch('/me', auditLogger('Update Profile', 'User'), userController.updateProfile);
+router.post('/devices', userController.registerDevice);
 
 export default router;

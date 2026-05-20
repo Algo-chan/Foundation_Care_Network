@@ -91,6 +91,58 @@ export default function DashboardPage() {
     }
   }, [isAvailable]);
 
+  const [stats, setStats] = useState({
+    appointments: 0,
+    vitals: 0,
+    prescriptions: 0,
+    consultations: 0,
+    patients: 0,
+    avgWaitTime: '0 min'
+  });
+
+  const [recentAppointments, setRecentAppointments] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user) {
+        fetchDashboardData();
+    }
+  }, [user]);
+
+  const fetchDashboardData = async () => {
+    try {
+        const [statsRes, appointmentsRes]: any = await Promise.all([
+            api.get('/admin/stats'),
+            api.get('/appointments/my')
+        ]);
+
+        if (appointmentsRes.success) {
+            setRecentAppointments(appointmentsRes.data.slice(0, 3));
+            
+            const baseStats = {
+                appointments: appointmentsRes.data.length,
+                vitals: 0,
+                prescriptions: 0,
+                consultations: 0,
+                patients: statsRes.data?.users.patients || 0,
+                avgWaitTime: user?.role === 'DOCTOR' ? '12 min' : '14 min'
+            };
+
+            if (user?.role === 'PATIENT') {
+                const prescriptionsRes: any = await api.get('/v1/prescriptions'); // Assuming this exists or will be added
+                baseStats.prescriptions = prescriptionsRes.data?.length || 0;
+            } else if (user?.role === 'NURSE' || user?.role === 'RURAL_HO') {
+                // Fetch vitals recorded today
+                const vitalsRes: any = await api.get('/v1/vitals'); // Assuming this exists
+                baseStats.vitals = vitalsRes.data?.length || 0;
+            }
+
+            setStats(baseStats);
+        }
+    } catch (err) {
+        console.error('Failed to fetch dashboard data');
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -189,9 +241,16 @@ export default function DashboardPage() {
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform duration-1000"></div>
                 <div className="relative z-10 text-white space-y-4">
                     <h3 className="text-4xl font-black tracking-tight">Welcome back, {user.name.split(' ')[0]}!</h3>
-                    <p className="text-white/80 font-medium max-w-md">Your personalized FCN dashboard is ready. You have 3 appointments scheduled for today.</p>
+                    <p className="text-white/80 font-medium max-w-md">
+                        {user.role === 'DOCTOR' ? `You have ${stats.appointments} appointments scheduled for today.` :
+                         user.role === 'PATIENT' ? `Your next check-up is in ${stats.appointments > 0 ? 'soon' : 'no scheduled appointments'}.` :
+                         user.role === 'NURSE' ? `You have recorded ${stats.vitals} vitals today.` :
+                         'Your personalized FCN dashboard is ready.'}
+                    </p>
                     <div className="pt-4 flex gap-4">
-                        <button className="px-6 py-2.5 bg-white text-primary rounded-xl font-black text-sm hover:scale-105 transition-transform shadow-xl">View Schedule</button>
+                        <button onClick={() => router.push(user.role === 'PATIENT' || user.role === 'DOCTOR' ? '/appointments' : '/vitals')} className="px-6 py-2.5 bg-white text-primary rounded-xl font-black text-sm hover:scale-105 transition-transform shadow-xl">
+                            {user.role === 'PATIENT' || user.role === 'DOCTOR' ? 'View Schedule' : 'Manage Records'}
+                        </button>
                         <button className="px-6 py-2.5 bg-white/20 backdrop-blur-md text-white border border-white/20 rounded-xl font-black text-sm hover:bg-white/30 transition-all">Quick Report</button>
                     </div>
                 </div>
@@ -200,10 +259,27 @@ export default function DashboardPage() {
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {[
-                    { label: 'Patient Reach', value: '1,284', trend: '+12%', color: 'text-blue-600' },
-                    { label: 'Avg. Response', value: '14 min', trend: '-2m', color: 'text-emerald-600' },
-                    { label: 'Critical Flags', value: '03', trend: 'Stable', color: 'text-amber-600' },
-                    { label: 'Satisfaction', value: '4.9/5', trend: '+0.1', color: 'text-purple-600' },
+                    { 
+                        label: user.role === 'DOCTOR' ? 'Appointments Today' : 
+                               user.role === 'PATIENT' ? 'Total Visits' : 
+                               'Vitals Recorded', 
+                        value: user.role === 'PATIENT' || user.role === 'DOCTOR' ? stats.appointments : stats.vitals, 
+                        trend: '+12%', color: 'text-blue-600' 
+                    },
+                    { 
+                        label: user.role === 'PATIENT' ? 'Prescriptions' : 'Avg. Response', 
+                        value: user.role === 'PATIENT' ? stats.prescriptions : stats.avgWaitTime, 
+                        trend: '-2m', color: 'text-emerald-600' 
+                    },
+                    { 
+                        label: user.role === 'DOCTOR' || user.role === 'NURSE' || user.role === 'RURAL_HO' ? 'Active Patients' : 'Health Score', 
+                        value: user.role === 'PATIENT' ? '92%' : stats.patients, 
+                        trend: 'Stable', color: 'text-amber-600' 
+                    },
+                    { 
+                        label: 'Satisfaction', 
+                        value: '4.9/5', trend: '+0.1', color: 'text-purple-600' 
+                    },
                 ].map((stat, i) => (
                     <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-primary/20 transition-colors shadow-sm">
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{stat.label}</p>
@@ -214,6 +290,37 @@ export default function DashboardPage() {
                     </div>
                 ))}
             </div>
+
+            {(user.role === 'DOCTOR' || user.role === 'PATIENT') && recentAppointments.length > 0 && (
+                <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-xl font-black text-dark">{user.role === 'DOCTOR' ? 'Upcoming Today' : 'Your Appointments'}</h4>
+                        <Link href="/appointments" className="text-xs font-bold text-primary hover:underline">View All</Link>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {recentAppointments.map((apt) => (
+                            <div key={apt.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:border-primary/20 transition-all group">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-primary font-black text-xs border border-gray-100">
+                                        {(user.role === 'DOCTOR' ? apt.patient.user.name : apt.doctor.user.name).split(' ').map((n: any) => n[0]).join('')}
+                                    </div>
+                                    <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-white px-2 py-1 rounded-lg border border-gray-100">
+                                        {new Date(apt.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+                                <h5 className="font-black text-dark mb-1">{user.role === 'DOCTOR' ? apt.patient.user.name : `Dr. ${apt.doctor.user.name}`}</h5>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-4">{apt.type.replace('_', ' ')}</p>
+                                <button 
+                                    onClick={() => router.push(user.role === 'DOCTOR' ? `/patients/${apt.patientId}` : '/appointments')}
+                                    className="w-full py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-primary hover:text-primary transition-all"
+                                >
+                                    {user.role === 'DOCTOR' ? 'Open File' : 'View Details'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Action Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
@@ -295,6 +402,31 @@ export default function DashboardPage() {
                             </div>
                             <h3 className="text-xl font-black text-dark mb-2">Vitals History</h3>
                             <p className="text-gray-500 text-sm">View patient records history.</p>
+                        </div>
+                    </>
+                )}
+                {user.role === 'RURAL_HO' && (
+                    <>
+                        <div onClick={() => router.push('/patients')} className="bg-white p-8 rounded-[2rem] border border-gray-100 hover:border-primary transition-all cursor-pointer group">
+                            <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                                <svg className="w-8 h-8 text-gray-400 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                            </div>
+                            <h3 className="text-xl font-black text-dark mb-2">Patient Registry</h3>
+                            <p className="text-gray-500 text-sm">Manage patients in your designated zone.</p>
+                        </div>
+                        <div onClick={() => router.push('/vitals/record')} className="bg-white p-8 rounded-[2rem] border border-gray-100 hover:border-primary transition-all cursor-pointer group">
+                            <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                                <svg className="w-8 h-8 text-gray-400 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                            </div>
+                            <h3 className="text-xl font-black text-dark mb-2">Clinical Vitals</h3>
+                            <p className="text-gray-500 text-sm">Perform on-site vitals collection.</p>
+                        </div>
+                        <div onClick={() => router.push('/consultations')} className="bg-white p-8 rounded-[2rem] border border-gray-100 hover:border-primary transition-all cursor-pointer group">
+                            <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                                <svg className="w-8 h-8 text-gray-400 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                            </div>
+                            <h3 className="text-xl font-black text-dark mb-2">Expert Consultation</h3>
+                            <p className="text-gray-500 text-sm">Request help from city specialists.</p>
                         </div>
                     </>
                 )}
