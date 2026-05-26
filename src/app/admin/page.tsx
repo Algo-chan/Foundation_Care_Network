@@ -40,6 +40,21 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDownloadReport = () => {
+    window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/v1'}/admin/audit-logs/export`, '_blank');
+  };
+
+  const handleSystemStatus = async () => {
+    try {
+      const response: any = await api.get('/health');
+      if (response.success) {
+        alert('All systems operational: API, Database, and Redis are connected.');
+      }
+    } catch (err) {
+      alert('System warning: Some services may be unreachable.');
+    }
+  };
+
   if (loading) return <div className="text-center py-20 font-bold text-gray-400">Loading system metrics...</div>;
   if (!stats) return <div>Failed to load stats</div>;
 
@@ -105,7 +120,10 @@ export default function AdminDashboard() {
                 <span className="text-sm font-bold">Review Approvals</span>
                 <span className="bg-primary px-2 py-0.5 rounded-full text-[10px] font-black">{stats.users.pendingApprovals}</span>
               </Link>
-              <button className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/10">
+              <button 
+                onClick={handleSystemStatus}
+                className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/10"
+              >
                 <span className="text-sm font-bold">System Status</span>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               </button>
@@ -118,7 +136,10 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 As a system administrator, you have full access to manage users, hospitals, and pharmacies.
               </p>
-              <button className="text-sm font-black text-primary hover:text-primary-dark flex items-center gap-2">
+              <button 
+                onClick={handleDownloadReport}
+                className="text-sm font-black text-primary hover:text-primary-dark flex items-center gap-2"
+              >
                 Download Audit Report
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
               </button>

@@ -1,16 +1,46 @@
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
-import redis from '../utils/redis';
+import redis, { isRedisWorking } from '../utils/redis';
 
-export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({
-    // @ts-expect-error - Known type mismatch in library
-    sendCommand: (...args: string[]) => redis.call(...args),
-  }),
+function createRateLimiter(options: {
+  windowMs: number;
+  max: number;
+  prefix: string;
+  skip?: (req: any) => boolean;
+  message?: any;
+}) {
+  const { windowMs, max, prefix, skip, message } = options;
+  const baseConfig = {
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip,
+    message,
+    keyGenerator: (req: any) => `${prefix}:${req.ip}`,
+    validate: false,
+  };
+
+  if (isRedisWorking()) {
+    try {
+      const { RedisStore } = require('rate-limit-redis');
+      return rateLimit({
+        ...baseConfig,
+        store: new RedisStore({
+          sendCommand: (...args: unknown[]) => (redis as any).call(...(args as string[])),
+        }),
+      });
+    } catch {
+      // Fall through to memory store
+    }
+  }
+
+  return rateLimit(baseConfig);
+}
+
+export const authRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  prefix: 'auth',
   message: {
     success: false,
     error: {
@@ -21,13 +51,9 @@ export const authRateLimiter = rateLimit({
   },
 });
 
-export const generalRateLimiter = rateLimit({
+export const generalRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({
-    // @ts-expect-error - Known type mismatch in library
-    sendCommand: (...args: string[]) => redis.call(...args),
-  }),
+  prefix: 'general',
+  skip: (req) => req.path.startsWith('/v1/auth'),
 });

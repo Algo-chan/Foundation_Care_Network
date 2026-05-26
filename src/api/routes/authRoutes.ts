@@ -3,7 +3,8 @@ import * as authController from '../controllers/authController';
 
 const router = Router();
 
-// Public registration is disabled
+router.post('/register', authController.register);
+router.post('/verify-otp', authController.verifyOTP);
 router.post('/login', authController.login);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);

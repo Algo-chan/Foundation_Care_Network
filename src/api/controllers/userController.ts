@@ -93,3 +93,31 @@ export const updateProfile = async (
     next(error);
   }
 };
+
+export const registerDevice = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.userId;
+    const { fcmToken, deviceType } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "MISSING_TOKEN", message: "FCM token is required", status: 400 },
+      });
+    }
+
+    await prisma.userDevice.upsert({
+      where: { fcmToken },
+      update: { userId: userId!, deviceType },
+      create: { userId: userId!, fcmToken, deviceType },
+    });
+
+    res.json({ success: true, message: "Device registered successfully" });
+  } catch (error) {
+    next(error);
+  }
+};

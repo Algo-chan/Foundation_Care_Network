@@ -1,7 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
-  output          = "../../../node_modules/.prisma/client"
+  output          = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -46,6 +46,18 @@ model User {
   nurse        Nurse?
   notifications Notification[]
   auditLogs    AuditLog[]
+  messages     Message[]
+  devices      UserDevice[]
+}
+
+model UserDevice {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  fcmToken  String   @unique
+  deviceType String? // e.g. "android", "ios", "web"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Patient {
@@ -144,6 +156,17 @@ model Consultation {
   notes        String?
   startedAt    DateTime @default(now())
   endedAt      DateTime?
+  messages     Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now())
 }
 
 model Notification {
